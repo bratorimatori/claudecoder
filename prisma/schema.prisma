@@ -1,0 +1,136 @@
+// This is your Prisma schema file
+// For Supabase PostgreSQL with pgvector support
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  commands      Command[]
+  workflows     Workflow[]
+  usageAnalytics UsageAnalytics[]
+
+  @@map("users")
+}
+
+model Command {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String
+  code        String   @db.Text
+  category    String
+  tags        String[]
+  author      String?
+  authorId    String?
+  githubUrl   String?
+  installs    Int      @default(0)
+  likes       Int      @default(0)
+  views       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // For AI semantic search with pgvector
+  embedding   Unsupported("vector(1536)")?
+
+  user        User?    @relation(fields: [authorId], references: [id])
+
+  @@index([category])
+  @@index([tags])
+  @@map("commands")
+}
+
+model MCPServer {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String
+  npmPackage  String?
+  githubUrl   String?
+  category    String
+  tags        String[]
+  config      Json?
+  installs    Int      @default(0)
+  likes       Int      @default(0)
+  views       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // For AI semantic search
+  embedding   Unsupported("vector(1536)")?
+
+  @@index([category])
+  @@index([tags])
+  @@map("mcp_servers")
+}
+
+model Workflow {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String
+  definition  Json     // React Flow nodes and edges as JSON
+  script      String?  @db.Text // Generated bash script
+  category    String
+  tags        String[]
+  authorId    String
+  isPublic    Boolean  @default(false)
+  installs    Int      @default(0)
+  likes       Int      @default(0)
+  views       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // For AI semantic search
+  embedding   Unsupported("vector(1536)")?
+
+  user        User     @relation(fields: [authorId], references: [id])
+
+  @@index([category])
+  @@index([tags])
+  @@index([authorId])
+  @@map("workflows")
+}
+
+model UsageAnalytics {
+  id              String   @id @default(cuid())
+  userId          String
+  resourceType    String   // 'command', 'workflow', 'ai_generation', 'chat'
+  resourceId      String?
+  action          String   // 'view', 'install', 'like', 'generate', 'chat'
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([resourceType, resourceId])
+  @@map("usage_analytics")
+}
+
+model RateLimit {
+  id              String   @id @default(cuid())
+  userId          String
+  resourceType    String   // 'ai_command', 'ai_chat', 'workflow'
+  count           Int      @default(0)
+  resetAt         DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, resourceType])
+  @@index([userId, resourceType, resetAt])
+  @@map("rate_limits")
+}
